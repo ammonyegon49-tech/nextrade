@@ -58,6 +58,18 @@ def init_db():
             timestamp TEXT
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS wallet_tx (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            tx_type TEXT,
+            method TEXT,
+            account_details TEXT,
+            amount REAL,
+            status TEXT,
+            timestamp TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -331,6 +343,63 @@ async def place_trade(req: TradeRequest):
     conn.commit()
     conn.close()
     return {"status": "filled", "filled_qty": coin_qty, "price": price}
+
+
+class WalletTxRequest(BaseModel):
+    user_id: int
+    tx_type: str
+    method: str
+    account_details: str
+    amount: float
+
+@app.post("/api/wallet/tx")
+def wallet_transaction(req: WalletTxRequest):
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than $0.")
+    if not req.account_details.strip():
+        raise HTTPException(status_code=400, detail="Please enter your wallet number, email, or bank account details.")
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT usd_balance, kyc_status FROM users WHERE id = ?", (req.user_id,))
+    user = c.fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    tx_type = req.tx_type.upper()
+    if tx_type == "DEPOSIT":
+        new_bal = user["usd_balance"] + req.amount
+        status = "COMPLETED"
+    elif tx_type == "WITHDRAW":
+        if user["kyc_status"] != "VERIFIED":
+            conn.close()
+            raise HTTPException(status_code=403, detail="Complete KYC Identity Verification before withdrawing funds.")
+        if user["usd_balance"] < req.amount:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Insufficient USDT balance for withdrawal.")
+        new_bal = user["usd_balance"] - req.amount
+        status = "PROCESSING"
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid transaction type.")
+
+    c.execute("UPDATE users SET usd_balance = ? WHERE id = ?", (new_bal, req.user_id))
+    c.execute(
+        "INSERT INTO wallet_tx (user_id, tx_type, method, account_details, amount, status, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (req.user_id, tx_type, req.method, req.account_details.strip(), req.amount, status, datetime.utcnow().strftime("%Y-%m-%d %H:%M"))
+    )
+    conn.commit()
+    conn.close()
+    return {"status": status, "new_balance": new_bal}
+
+@app.get("/api/wallet/history/{user_id}")
+def wallet_history(user_id: int):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM wallet_tx WHERE user_id = ? ORDER BY id DESC LIMIT 15", (user_id,))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

@@ -149,7 +149,11 @@
   <div>
     <div class="card" style="margin-bottom: 16px;">
       <h3 style="margin-bottom: 12px;">Spot Wallet & Net Worth</h3>
-      <div style="font-size: 1.65rem; font-weight: 800; color: var(--green); margin-bottom: 12px;" id="netWorth">$0.00</div>
+      <div style="font-size: 1.65rem; font-weight: 800; color: var(--green); margin-bottom: 10px;" id="netWorth">$0.00</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px;">
+        <button class="btn" style="padding:8px;" onclick="openWalletModal('DEPOSIT')">+ Deposit</button>
+        <button class="btn btn-outline" style="padding:8px;" onclick="openWalletModal('WITHDRAW')">↑ Withdraw</button>
+      </div>
       <div class="wallet-row"><span>USDT (Available Cash)</span><strong id="bal-USDT">$0.00</strong></div>
       <div class="wallet-row"><span>Bitcoin (BTC)</span><strong id="bal-BTC">0.000000</strong></div>
       <div class="wallet-row"><span>Ethereum (ETH)</span><strong id="bal-ETH">0.000000</strong></div>
@@ -235,11 +239,128 @@
   </div>
 </div>
 
+<!-- WALLET DEPOSIT / WITHDRAW MODAL -->
+<div id="walletModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width: 480px;">
+    <h2 id="walletModalTitle">Deposit Funds</h2>
+    <p id="walletModalSub">Select any global mobile money wallet, bank transfer rail, e-wallet, or crypto network.</p>
+    <div id="walletError" class="error-msg"></div>
+
+    <label>Select Payment Method (Wallets & Banks Worldwide)</label>
+    <select id="walletMethod" onchange="updateWalletPlaceholder()">
+      <optgroup label="African Mobile Money">
+        <option value="M-Pesa (Safaricom / Vodacom)">M-Pesa (Kenya, Tanzania, Mozambique, DRC)</option>
+        <option value="MTN Mobile Money (MoMo)">MTN Mobile Money (MoMo — Ghana, Uganda, Rwanda, Nigeria, Zambia, Cameroon)</option>
+        <option value="Airtel Money">Airtel Money (Africa & India)</option>
+        <option value="Orange Money">Orange Money (West & Central Africa)</option>
+        <option value="Tigo Pesa / Mixx by Yas">Tigo Pesa / Mixx</option>
+        <option value="Vodafone Cash / Telecel">Vodafone Cash / Telecel</option>
+      </optgroup>
+      <optgroup label="Banks (Local & International Wires)">
+        <option value="Local Bank Transfer (Kenya / Africa)">Local Bank Transfer (Equity, KCB, Co-op, Absa, Stanbic, GTBank, Access, FirstBank, FNB)</option>
+        <option value="SEPA Instant Bank Transfer (Europe)">SEPA / SEPA Instant Bank Transfer (EU IBAN)</option>
+        <option value="UK Faster Payments (GBP)">UK Faster Payments (Sort Code & Account)</option>
+        <option value="US ACH / Domestic Wire">US ACH / Fedwire Bank Transfer</option>
+        <option value="SWIFT International Bank Wire">SWIFT / BIC International Bank Wire</option>
+        <option value="Visa / Mastercard Direct">Visa Direct / Mastercard Send (Card)</option>
+      </optgroup>
+      <optgroup label="Global Digital Wallets">
+        <option value="PayPal">PayPal</option>
+        <option value="Wise (TransferWise)">Wise Multi-Currency Account</option>
+        <option value="Revolut">Revolut</option>
+        <option value="Skrill / Neteller">Skrill / Neteller</option>
+        <option value="Cash App / Venmo / Zelle">Cash App / Venmo / Zelle (US)</option>
+        <option value="Apple Pay / Google Pay">Apple Pay / Google Pay</option>
+      </optgroup>
+      <optgroup label="Asia & Latin America Wallets">
+        <option value="GCash / Maya (Philippines)">GCash / Maya (Philippines)</option>
+        <option value="bKash / Nagad (Bangladesh)">bKash / Nagad (Bangladesh)</option>
+        <option value="UPI / Paytm / PhonePe (India)">UPI / Paytm / PhonePe (India)</option>
+        <option value="Alipay / WeChat Pay">Alipay / WeChat Pay</option>
+        <option value="Pix (Brazil) / Mercado Pago">Pix (Brazil) / Mercado Pago (LatAm)</option>
+      </optgroup>
+      <optgroup label="Crypto & Stablecoin Wallets">
+        <option value="USDT (TRC20 / Tron)">USDT (TRC20 Network)</option>
+        <option value="USDT / USDC (ERC20 / BEP20)">USDT / USDC (ERC20 / BEP20)</option>
+        <option value="Bitcoin (BTC On-Chain)">Bitcoin (BTC Wallet)</option>
+        <option value="Solana (SOL / Phantom)">Solana (SOL Wallet)</option>
+      </optgroup>
+    </select>
+
+    <label id="walletAccountLabel">Mobile Money Phone Number / Account Details</label>
+    <input type="text" id="walletAccountInput" placeholder="e.g. +254712345678 (M-Pesa / MTN Number)" />
+
+    <label>Amount (USD / USDT)</label>
+    <input type="number" id="walletTxAmount" placeholder="e.g. 250" min="1" step="any" />
+
+    <div style="display:flex; gap:10px;">
+      <button class="btn" id="walletSubmitBtn" style="flex:1; padding:11px;" onclick="submitWalletTx()">Confirm Deposit</button>
+      <button class="btn btn-outline" onclick="closeWalletModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script>
   let currentSymbol = 'BTC';
   let currentUser = JSON.parse(localStorage.getItem('nextrade_user') || 'null');
   let livePrices = { BTC: { price: 91250 }, ETH: { price: 3180 }, SOL: { price: 215 } };
+
+  let currentWalletTxType = 'DEPOSIT';
+
+  function openWalletModal(type) {
+    if (!currentUser) { openAuthModal(); return; }
+    currentWalletTxType = type;
+    document.getElementById('walletError').innerText = '';
+    document.getElementById('walletModalTitle').innerText = type === 'DEPOSIT' ? 'Deposit Funds to NexTrade' : 'Withdraw Funds from NexTrade';
+    document.getElementById('walletSubmitBtn').innerText = type === 'DEPOSIT' ? 'Confirm Deposit' : 'Request Withdrawal';
+    updateWalletPlaceholder();
+    document.getElementById('walletModal').classList.remove('hidden');
+  }
+  function closeWalletModal() { document.getElementById('walletModal').classList.add('hidden'); }
+
+  function updateWalletPlaceholder() {
+    const m = document.getElementById('walletMethod').value;
+    const inp = document.getElementById('walletAccountInput');
+    if (m.includes('M-Pesa') || m.includes('MTN') || m.includes('Airtel') || m.includes('Orange') || m.includes('Tigo') || m.includes('Vodafone') || m.includes('GCash') || m.includes('bKash')) {
+      inp.placeholder = 'Enter Mobile Money Phone Number (e.g. +254712345678 / +233...)';
+    } else if (m.includes('Bank') || m.includes('SEPA') || m.includes('UK') || m.includes('ACH') || m.includes('SWIFT')) {
+      inp.placeholder = 'Bank Name + Account Number / IBAN / SWIFT Code';
+    } else if (m.includes('USDT') || m.includes('Bitcoin') || m.includes('Solana')) {
+      inp.placeholder = 'Paste Crypto Wallet Address (0x... / T... / bc1...)';
+    } else {
+      inp.placeholder = 'Wallet Email, @Username, UPI ID, or Pix Key';
+    }
+  }
+
+  async function submitWalletTx() {
+    const amt = parseFloat(document.getElementById('walletTxAmount').value);
+    const acc = document.getElementById('walletAccountInput').value;
+    const method = document.getElementById('walletMethod').value;
+    const res = await fetch('/api/wallet/tx', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: currentUser.user_id, tx_type: currentWalletTxType, method, account_details: acc, amount: amt })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('walletError').innerText = data.detail || 'Transaction failed.';
+      if (res.status === 403) { closeWalletModal(); openKycModal(); }
+      return;
+    }
+    document.getElementById('walletTxAmount').value = '';
+    closeWalletModal();
+    refreshPortfolio();
+  }
+
+  async function loadWalletHistory() {
+    if (!currentUser) return;
+    const res = await fetch(`/api/wallet/history/${currentUser.user_id}`);
+    const txs = await res.json();
+    const tbody = document.getElementById('walletTxHistory');
+    tbody.innerHTML = txs.length === 0
+      ? '<tr><td colspan="6" style="color:var(--muted);">No deposits or withdrawals yet.</td></tr>'
+      : txs.map(t => `<tr><td>${t.timestamp}</td><td style="color:${t.tx_type === 'DEPOSIT' ? 'var(--green)' : 'var(--gold)'}; font-weight:700;">${t.tx_type}</td><td>${t.method}</td><td>${t.account_details}</td><td>$${t.amount.toFixed(2)}</td><td>${t.status}</td></tr>`).join('');
+  }
 
   function loadChart(sym) {
     document.getElementById('tv_chart').innerHTML = '';
@@ -408,6 +529,7 @@
     const net = u.usd_balance + (h.BTC || 0)*livePrices.BTC.price + (h.ETH || 0)*livePrices.ETH.price + (h.SOL || 0)*livePrices.SOL.price;
     document.getElementById('netWorth').innerText = `$${net.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
 
+    loadWalletHistory();
     const tbody = document.getElementById('tradeHistory');
     if (data.trades.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No orders placed yet.</td></tr>';
@@ -466,7 +588,11 @@
   <div>
     <div class="card" style="margin-bottom: 16px;">
       <h3 style="margin-bottom: 12px;">Spot Wallet & Net Worth</h3>
-      <div style="font-size: 1.65rem; font-weight: 800; color: var(--green); margin-bottom: 12px;" id="netWorth">$0.00</div>
+      <div style="font-size: 1.65rem; font-weight: 800; color: var(--green); margin-bottom: 10px;" id="netWorth">$0.00</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px;">
+        <button class="btn" style="padding:8px;" onclick="openWalletModal('DEPOSIT')">+ Deposit</button>
+        <button class="btn btn-outline" style="padding:8px;" onclick="openWalletModal('WITHDRAW')">↑ Withdraw</button>
+      </div>
       <div class="wallet-row"><span>USDT (Available Cash)</span><strong id="bal-USDT">$0.00</strong></div>
       <div class="wallet-row"><span>Bitcoin (BTC)</span><strong id="bal-BTC">0.000000</strong></div>
       <div class="wallet-row"><span>Ethereum (ETH)</span><strong id="bal-ETH">0.000000</strong></div>
@@ -549,11 +675,128 @@
     </div>
   </div>
 </div>
+<!-- WALLET DEPOSIT / WITHDRAW MODAL -->
+<div id="walletModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width: 480px;">
+    <h2 id="walletModalTitle">Deposit Funds</h2>
+    <p id="walletModalSub">Select any global mobile money wallet, bank transfer rail, e-wallet, or crypto network.</p>
+    <div id="walletError" class="error-msg"></div>
+
+    <label>Select Payment Method (Wallets & Banks Worldwide)</label>
+    <select id="walletMethod" onchange="updateWalletPlaceholder()">
+      <optgroup label="African Mobile Money">
+        <option value="M-Pesa (Safaricom / Vodacom)">M-Pesa (Kenya, Tanzania, Mozambique, DRC)</option>
+        <option value="MTN Mobile Money (MoMo)">MTN Mobile Money (MoMo — Ghana, Uganda, Rwanda, Nigeria, Zambia, Cameroon)</option>
+        <option value="Airtel Money">Airtel Money (Africa & India)</option>
+        <option value="Orange Money">Orange Money (West & Central Africa)</option>
+        <option value="Tigo Pesa / Mixx by Yas">Tigo Pesa / Mixx</option>
+        <option value="Vodafone Cash / Telecel">Vodafone Cash / Telecel</option>
+      </optgroup>
+      <optgroup label="Banks (Local & International Wires)">
+        <option value="Local Bank Transfer (Kenya / Africa)">Local Bank Transfer (Equity, KCB, Co-op, Absa, Stanbic, GTBank, Access, FirstBank, FNB)</option>
+        <option value="SEPA Instant Bank Transfer (Europe)">SEPA / SEPA Instant Bank Transfer (EU IBAN)</option>
+        <option value="UK Faster Payments (GBP)">UK Faster Payments (Sort Code & Account)</option>
+        <option value="US ACH / Domestic Wire">US ACH / Fedwire Bank Transfer</option>
+        <option value="SWIFT International Bank Wire">SWIFT / BIC International Bank Wire</option>
+        <option value="Visa / Mastercard Direct">Visa Direct / Mastercard Send (Card)</option>
+      </optgroup>
+      <optgroup label="Global Digital Wallets">
+        <option value="PayPal">PayPal</option>
+        <option value="Wise (TransferWise)">Wise Multi-Currency Account</option>
+        <option value="Revolut">Revolut</option>
+        <option value="Skrill / Neteller">Skrill / Neteller</option>
+        <option value="Cash App / Venmo / Zelle">Cash App / Venmo / Zelle (US)</option>
+        <option value="Apple Pay / Google Pay">Apple Pay / Google Pay</option>
+      </optgroup>
+      <optgroup label="Asia & Latin America Wallets">
+        <option value="GCash / Maya (Philippines)">GCash / Maya (Philippines)</option>
+        <option value="bKash / Nagad (Bangladesh)">bKash / Nagad (Bangladesh)</option>
+        <option value="UPI / Paytm / PhonePe (India)">UPI / Paytm / PhonePe (India)</option>
+        <option value="Alipay / WeChat Pay">Alipay / WeChat Pay</option>
+        <option value="Pix (Brazil) / Mercado Pago">Pix (Brazil) / Mercado Pago (LatAm)</option>
+      </optgroup>
+      <optgroup label="Crypto & Stablecoin Wallets">
+        <option value="USDT (TRC20 / Tron)">USDT (TRC20 Network)</option>
+        <option value="USDT / USDC (ERC20 / BEP20)">USDT / USDC (ERC20 / BEP20)</option>
+        <option value="Bitcoin (BTC On-Chain)">Bitcoin (BTC Wallet)</option>
+        <option value="Solana (SOL / Phantom)">Solana (SOL Wallet)</option>
+      </optgroup>
+    </select>
+
+    <label id="walletAccountLabel">Mobile Money Phone Number / Account Details</label>
+    <input type="text" id="walletAccountInput" placeholder="e.g. +254712345678 (M-Pesa / MTN Number)" />
+
+    <label>Amount (USD / USDT)</label>
+    <input type="number" id="walletTxAmount" placeholder="e.g. 250" min="1" step="any" />
+
+    <div style="display:flex; gap:10px;">
+      <button class="btn" id="walletSubmitBtn" style="flex:1; padding:11px;" onclick="submitWalletTx()">Confirm Deposit</button>
+      <button class="btn btn-outline" onclick="closeWalletModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script>
   let currentSymbol = 'BTC';
   let currentUser = JSON.parse(localStorage.getItem('nextrade_user') || 'null');
   let livePrices = { BTC: { price: 91250 }, ETH: { price: 3180 }, SOL: { price: 215 } };
+
+  let currentWalletTxType = 'DEPOSIT';
+
+  function openWalletModal(type) {
+    if (!currentUser) { openAuthModal(); return; }
+    currentWalletTxType = type;
+    document.getElementById('walletError').innerText = '';
+    document.getElementById('walletModalTitle').innerText = type === 'DEPOSIT' ? 'Deposit Funds to NexTrade' : 'Withdraw Funds from NexTrade';
+    document.getElementById('walletSubmitBtn').innerText = type === 'DEPOSIT' ? 'Confirm Deposit' : 'Request Withdrawal';
+    updateWalletPlaceholder();
+    document.getElementById('walletModal').classList.remove('hidden');
+  }
+  function closeWalletModal() { document.getElementById('walletModal').classList.add('hidden'); }
+
+  function updateWalletPlaceholder() {
+    const m = document.getElementById('walletMethod').value;
+    const inp = document.getElementById('walletAccountInput');
+    if (m.includes('M-Pesa') || m.includes('MTN') || m.includes('Airtel') || m.includes('Orange') || m.includes('Tigo') || m.includes('Vodafone') || m.includes('GCash') || m.includes('bKash')) {
+      inp.placeholder = 'Enter Mobile Money Phone Number (e.g. +254712345678 / +233...)';
+    } else if (m.includes('Bank') || m.includes('SEPA') || m.includes('UK') || m.includes('ACH') || m.includes('SWIFT')) {
+      inp.placeholder = 'Bank Name + Account Number / IBAN / SWIFT Code';
+    } else if (m.includes('USDT') || m.includes('Bitcoin') || m.includes('Solana')) {
+      inp.placeholder = 'Paste Crypto Wallet Address (0x... / T... / bc1...)';
+    } else {
+      inp.placeholder = 'Wallet Email, @Username, UPI ID, or Pix Key';
+    }
+  }
+
+  async function submitWalletTx() {
+    const amt = parseFloat(document.getElementById('walletTxAmount').value);
+    const acc = document.getElementById('walletAccountInput').value;
+    const method = document.getElementById('walletMethod').value;
+    const res = await fetch('/api/wallet/tx', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: currentUser.user_id, tx_type: currentWalletTxType, method, account_details: acc, amount: amt })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('walletError').innerText = data.detail || 'Transaction failed.';
+      if (res.status === 403) { closeWalletModal(); openKycModal(); }
+      return;
+    }
+    document.getElementById('walletTxAmount').value = '';
+    closeWalletModal();
+    refreshPortfolio();
+  }
+
+  async function loadWalletHistory() {
+    if (!currentUser) return;
+    const res = await fetch(`/api/wallet/history/${currentUser.user_id}`);
+    const txs = await res.json();
+    const tbody = document.getElementById('walletTxHistory');
+    tbody.innerHTML = txs.length === 0
+      ? '<tr><td colspan="6" style="color:var(--muted);">No deposits or withdrawals yet.</td></tr>'
+      : txs.map(t => `<tr><td>${t.timestamp}</td><td style="color:${t.tx_type === 'DEPOSIT' ? 'var(--green)' : 'var(--gold)'}; font-weight:700;">${t.tx_type}</td><td>${t.method}</td><td>${t.account_details}</td><td>$${t.amount.toFixed(2)}</td><td>${t.status}</td></tr>`).join('');
+  }
 
   function loadChart(sym) {
     document.getElementById('tv_chart').innerHTML = '';
@@ -685,6 +928,7 @@
     document.getElementById('bal-SOL').innerText = (h.SOL || 0).toFixed(6);
     const net = u.usd_balance + (h.BTC || 0)*livePrices.BTC.price + (h.ETH || 0)*livePrices.ETH.price + (h.SOL || 0)*livePrices.SOL.price;
     document.getElementById('netWorth').innerText = `$${net.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    loadWalletHistory();
     const tbody = document.getElementById('tradeHistory');
     tbody.innerHTML = data.trades.length === 0
       ? '<tr><td colspan="6" style="color:var(--muted);">No orders placed yet.</td></tr>'
