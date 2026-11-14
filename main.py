@@ -71,6 +71,12 @@ def init_db():
         )
     """)
     conn.commit()
+    for col, coldef in [("phone", "TEXT"), ("kyc_status", "TEXT DEFAULT 'UNVERIFIED'"), ("kyc_doc_type", "TEXT"), ("kyc_doc_number", "TEXT"), ("kyc_doc_file", "TEXT")]:
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col} {coldef}")
+            conn.commit()
+        except Exception:
+            pass
     conn.close()
 
 init_db()
