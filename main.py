@@ -1,13 +1,19 @@
-from fastapi import FastAPI, HTTPException
+import os
+import sqlite3
+import hashlib
+import secrets
+import shutil
+from datetime import datetime
+from typing import Optional
+import httpx
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import sqlite3, hashlib, secrets, httpx, os
-from datetime import datetime
 
-app = FastAPI(title="NexTrade API")
-os.makedirs("static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app = FastAPI(title="NexTrade Exchange")
+
+os.makedirs("static/kyc_uploads", exist_ok=True)
 DB_PATH = "nextrade.db"
 
 def get_db():
@@ -17,126 +23,245 @@ def get_db():
 
 def init_db():
     conn = get_db()
-    conn.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        token TEXT,
-        balance REAL DEFAULT 10000.0,
-        btc REAL DEFAULT 0.0,
-        eth REAL DEFAULT 0.0,
-        sol REAL DEFAULT 0.0
-    )''')
-    conn.execute('''CREATE TABLE IF NOT EXISTS trades (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        pair TEXT NOT NULL,
-        side TEXT NOT NULL,
-        amount REAL NOT NULL,
-        qty REAL DEFAULT 0.0,
-        price REAL NOT NULL,
-        timestamp TEXT NOT NULL
-    )''')
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            phone TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            usd_balance REAL DEFAULT 10000.0,
+            kyc_status TEXT DEFAULT 'UNVERIFIED',
+            kyc_doc_type TEXT,
+            kyc_doc_number TEXT,
+            kyc_doc_file TEXT,
+            created_at TEXT
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS holdings (
+            user_id INTEGER,
+            symbol TEXT,
+            amount REAL DEFAULT 0.0,
+            PRIMARY KEY (user_id, symbol)
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            symbol TEXT,
+            side TEXT,
+            amount REAL,
+            price REAL,
+            total REAL,
+            timestamp TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
 init_db()
 
-class AuthPayload(BaseModel):
-    username: str
-    password: str
-
-class TradePayload(BaseModel):
-    token: str
-    asset: str
-    pair: str
-    side: str
-    amount: float
-    price: float
-
-def hash_pw(pw: str) -> str:
+def hash_password(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
 
-@app.get("/")
-async def serve_frontend():
-    return FileResponse(os.path.join("static", "index.html"))
+class RegisterRequest(BaseModel):
+    full_name: str
+    email: str
+    phone: str
+    password: str
 
-@app.post("/api/auth")
-async def login_or_register(payload: AuthPayload):
-    uname = payload.username.strip().lower()
-    if len(uname) < 3 or len(payload.password) < 4:
-        raise HTTPException(status_code=400, detail="Username (3+ chars) and password (4+ chars) required.")
+class LoginRequest(BaseModel):
+    identifier: str  # Email or Phone
+    password: str
+
+class TradeRequest(BaseModel):
+    user_id: int
+    symbol: str
+    side: str
+    usd_amount: float
+
+@app.post("/api/register")
+def register(req: RegisterRequest):
+    email = req.email.strip().lower()
+    phone = req.phone.strip()
+    if not req.full_name.strip() or not email or not phone or len(req.password) < 4:
+        raise HTTPException(status_code=400, detail="All fields are required (min 4 char password).")
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username = ?", (uname,)).fetchone()
-    token = secrets.token_hex(16)
-    if user:
-        if user["password_hash"] != hash_pw(payload.password):
-            conn.close()
-            raise HTTPException(status_code=401, detail="Invalid password.")
-        conn.execute("UPDATE users SET token = ? WHERE id = ?", (token, user["id"]))
+    c = conn.cursor()
+    try:
+        c.execute(
+            "INSERT INTO users (full_name, email, phone, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+            (req.full_name.strip(), email, phone, hash_password(req.password), datetime.utcnow().isoformat())
+        )
+        user_id = c.lastrowid
+        for sym in ["BTC", "ETH", "SOL"]:
+            c.execute("INSERT INTO holdings (user_id, symbol, amount) VALUES (?, ?, 0.0)", (user_id, sym))
         conn.commit()
-    else:
-        conn.execute("INSERT INTO users (username, password_hash, token, balance, btc, eth, sol) VALUES (?, ?, ?, 10000.0, 0.0, 0.0, 0.0)",
-                     (uname, hash_pw(payload.password), token))
-        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email or phone number is already registered.")
     conn.close()
-    return {"token": token, "username": uname}
+    return {"user_id": user_id, "message": "Account created. Please complete KYC verification."}
 
-@app.get("/api/portfolio")
-async def get_portfolio(token: str):
+@app.post("/api/login")
+def login(req: LoginRequest):
+    ident = req.identifier.strip().lower()
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE token = ?", (token,)).fetchone()
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM users WHERE (lower(email) = ? OR phone = ?) AND password_hash = ?",
+        (ident, req.identifier.strip(), hash_password(req.password))
+    )
+    user = c.fetchone()
+    conn.close()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email/phone or password.")
+    return {
+        "user_id": user["id"],
+        "full_name": user["full_name"],
+        "email": user["email"],
+        "phone": user["phone"],
+        "kyc_status": user["kyc_status"],
+        "kyc_doc_type": user["kyc_doc_type"],
+        "kyc_doc_number": user["kyc_doc_number"]
+    }
+
+@app.post("/api/kyc")
+async def submit_kyc(
+    user_id: int = Form(...),
+    doc_type: str = Form(...),
+    doc_number: str = Form(...),
+    full_legal_name: str = Form(...),
+    document_file: UploadFile = File(...)
+):
+    allowed_types = ["National Identity Card", "Passport", "Driving License", "Other Government ID"]
+    if doc_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid document type selected.")
+    if not doc_number.strip() or not full_legal_name.strip():
+        raise HTTPException(status_code=400, detail="Document number and full legal name are required.")
+
+    ext = os.path.splitext(document_file.filename)[1] or ".jpg"
+    safe_name = f"kyc_{user_id}_{secrets.token_hex(4)}{ext}"
+    file_path = os.path.join("static/kyc_uploads", safe_name)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(document_file.file, buffer)
+
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        UPDATE users
+        SET full_name = ?, kyc_status = 'VERIFIED', kyc_doc_type = ?, kyc_doc_number = ?, kyc_doc_file = ?
+        WHERE id = ?
+    """, (full_legal_name.strip(), doc_type, doc_number.strip().upper(), f"/static/kyc_uploads/{safe_name}", user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "VERIFIED", "doc_type": doc_type, "doc_number": doc_number.strip().upper()}
+
+@app.get("/api/prices")
+async def get_prices():
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true"
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url)
+            data = r.json()
+            return {
+                "BTC": {"price": data["bitcoin"]["usd"], "change": data["bitcoin"].get("usd_24h_change", 0)},
+                "ETH": {"price": data["ethereum"]["usd"], "change": data["ethereum"].get("usd_24h_change", 0)},
+                "SOL": {"price": data["solana"]["usd"], "change": data["solana"].get("usd_24h_change", 0)},
+            }
+    except Exception:
+        return {
+            "BTC": {"price": 91250.0, "change": 2.4},
+            "ETH": {"price": 3180.0, "change": 1.8},
+            "SOL": {"price": 215.0, "change": 4.1},
+        }
+
+@app.get("/api/portfolio/{user_id}")
+def get_portfolio(user_id: int):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = c.fetchone()
     if not user:
         conn.close()
-        raise HTTPException(status_code=401, detail="Session expired.")
-    trades = conn.execute("SELECT pair, side, amount, qty, price, timestamp FROM trades WHERE user_id = ? ORDER BY id DESC LIMIT 20", (user["id"],)).fetchall()
+        raise HTTPException(status_code=404, detail="User not found")
+    c.execute("SELECT symbol, amount FROM holdings WHERE user_id = ?", (user_id,))
+    holdings = {row["symbol"]: row["amount"] for row in c.fetchall()}
+    c.execute("SELECT * FROM trades WHERE user_id = ? ORDER BY id DESC LIMIT 20", (user_id,))
+    trades = [dict(row) for row in c.fetchall()]
     conn.close()
     return {
-        "username": user["username"],
-        "balance": user["balance"],
-        "holdings": {"bitcoin": user["btc"], "ethereum": user["eth"], "solana": user["sol"]},
-        "trades": [dict(t) for t in trades]
+        "user": {
+            "id": user["id"],
+            "full_name": user["full_name"],
+            "email": user["email"],
+            "phone": user["phone"],
+            "usd_balance": user["usd_balance"],
+            "kyc_status": user["kyc_status"],
+            "kyc_doc_type": user["kyc_doc_type"],
+            "kyc_doc_number": user["kyc_doc_number"],
+        },
+        "holdings": holdings,
+        "trades": trades,
     }
 
 @app.post("/api/trade")
-async def place_trade(payload: TradePayload):
-    col_map = {"bitcoin": "btc", "ethereum": "eth", "solana": "sol"}
-    if payload.asset not in col_map or payload.amount <= 0 or payload.price <= 0:
-        raise HTTPException(status_code=400, detail="Invalid order parameters.")
-    col = col_map[payload.asset]
-    qty = payload.amount / payload.price
+async def place_trade(req: TradeRequest):
+    if req.usd_amount <= 0:
+        raise HTTPException(status_code=400, detail="Trade amount must be positive.")
+    prices = await get_prices()
+    if req.symbol not in prices:
+        raise HTTPException(status_code=400, detail="Unsupported asset.")
+    price = prices[req.symbol]["price"]
+    coin_qty = req.usd_amount / price
+
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE token = ?", (payload.token,)).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT usd_balance, kyc_status FROM users WHERE id = ?", (req.user_id,))
+    user = c.fetchone()
     if not user:
         conn.close()
-        raise HTTPException(status_code=401, detail="Please log in to trade.")
-    bal, held = user["balance"], user[col]
-    if payload.side == "BUY":
-        if payload.amount > bal:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user["kyc_status"] != "VERIFIED":
+        conn.close()
+        raise HTTPException(status_code=403, detail="Please complete KYC Identity Verification before trading.")
+
+    c.execute("SELECT amount FROM holdings WHERE user_id = ? AND symbol = ?", (req.user_id, req.symbol))
+    row = c.fetchone()
+    current_coin = row["amount"] if row else 0.0
+
+    if req.side.upper() == "BUY":
+        if user["usd_balance"] < req.usd_amount:
             conn.close()
-            raise HTTPException(status_code=400, detail="Insufficient USD balance.")
-        new_bal, new_held = bal - payload.amount, held + qty
+            raise HTTPException(status_code=400, detail="Insufficient USDT balance.")
+        new_usd = user["usd_balance"] - req.usd_amount
+        new_coin = current_coin + coin_qty
+    elif req.side.upper() == "SELL":
+        if current_coin < coin_qty:
+            conn.close()
+            raise HTTPException(status_code=400, detail=f"Insufficient {req.symbol} balance.")
+        new_usd = user["usd_balance"] + req.usd_amount
+        new_coin = current_coin - coin_qty
     else:
-        if qty > held * 1.0001:
-            conn.close()
-            raise HTTPException(status_code=400, detail=f"Insufficient {col.upper()} holdings to sell.")
-        new_bal, new_held = bal + payload.amount, max(0.0, held - qty)
-    ts = datetime.now().strftime("%H:%M:%S")
-    conn.execute(f"UPDATE users SET balance = ?, {col} = ? WHERE id = ?", (new_bal, new_held, user["id"]))
-    conn.execute("INSERT INTO trades (user_id, pair, side, amount, qty, price, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                 (user["id"], payload.pair, payload.side, payload.amount, qty, payload.price, ts))
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid order side.")
+
+    c.execute("UPDATE users SET usd_balance = ? WHERE id = ?", (new_usd, req.user_id))
+    c.execute("UPDATE holdings SET amount = ? WHERE user_id = ? AND symbol = ?", (new_coin, req.user_id, req.symbol))
+    c.execute(
+        "INSERT INTO trades (user_id, symbol, side, amount, price, total, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (req.user_id, req.symbol, req.side.upper(), coin_qty, price, req.usd_amount, datetime.utcnow().strftime("%H:%M:%S"))
+    )
     conn.commit()
     conn.close()
-    return {"status": "filled"}
+    return {"status": "filled", "filled_qty": coin_qty, "price": price}
 
-@app.get("/api/prices")
-async def get_live_prices():
-    url = "https://api.coingecko.com/api/v3/simple/price"
-    params = {"ids": "bitcoin,ethereum,solana", "vs_currencies": "usd", "include_24hr_change": "true"}
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            res = await client.get(url, params=params)
-            res.raise_for_status()
-            return {"source": "live", "data": res.json()}
-    except Exception as e:
-        return {"source": "fallback", "error": str(e)}
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+def root():
+    return FileResponse("static/index.html")
