@@ -5,18 +5,23 @@ import secrets
 import shutil
 from datetime import datetime
 import httpx
+from fastapi.middleware.gzip import GZipMiddleware
+import asyncio
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 app = FastAPI(title="NexTrade Exchange")
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 os.makedirs("static/kyc_uploads", exist_ok=True)
 DB_PATH = "nextrade.db"
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -212,8 +217,13 @@ def compute_rsi(prices, period=14):
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 1)
 
+SIGNAL_CACHE = {"data": {}, "ts": 0}
+
 @app.get("/api/signals")
 async def get_trade_predictions():
+    now = time.time()
+    if SIGNAL_CACHE["data"] and now - SIGNAL_CACHE["ts"] < 60:
+        return SIGNAL_CACHE["data"]
     coin_map = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"}
     predictions = {}
     async with httpx.AsyncClient(timeout=8.0) as client:
@@ -268,6 +278,8 @@ async def get_trade_predictions():
                     "rsi": 44.5,
                     "reason": "Momentum trend continuation"
                 }
+    SIGNAL_CACHE["data"] = predictions
+    SIGNAL_CACHE["ts"] = time.time()
     return predictions
 
 @app.get("/api/portfolio/{user_id}")

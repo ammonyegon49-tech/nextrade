@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://s3.tradingview.com" crossorigin>
+  <link rel="dns-prefetch" href="https://s3.tradingview.com">
   <title>NexTrade — Regulated Crypto Spot Exchange</title>
     <style>
     :root {
@@ -988,7 +990,7 @@
     document.getElementById('tradeAmount').value = ''; refreshPortfolio();
   }
 
-  loadChart('BTC'); fetchPrices(); fetchSignals();
+  loadChart('BTC'); Promise.all([fetchPrices(), fetchSignals()]);
   setInterval(fetchPrices, 15000); setInterval(fetchSignals, 60000);
   if (currentUser) refreshPortfolio();
 </script>
