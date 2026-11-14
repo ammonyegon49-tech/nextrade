@@ -9,7 +9,7 @@
     <style>
     :root {
       --bg: #05080f;
-      --panel: rgba(16, 22, 34, 0.72);
+      --panel: #101622;
       --border: rgba(0, 210, 255, 0.16);
       --text: #f0f4f8;
       --muted: #8b9bb4;
@@ -28,13 +28,13 @@
         linear-gradient(rgba(0, 210, 255, 0.03) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 210, 255, 0.03) 1px, transparent 1px);
       background-size: 100% 100%, 100% 100%, 100% 100%, 44px 44px, 44px 44px;
-      background-attachment: fixed;
+      
       color: var(--text);
       min-height: 100vh;
     }
     header {
       display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
-      padding: 14px 24px; background: rgba(11, 15, 25, 0.82); backdrop-filter: blur(16px);
+      padding: 14px 24px; background: rgba(11, 15, 25, 0.82); 
       border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
     }
     .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.3rem; letter-spacing: 0.6px; }
@@ -53,7 +53,7 @@
     .btn-buy { background: linear-gradient(135deg, #0ecb81, #09a668); color: #05080f; width: 100%; padding: 11px; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(14, 203, 129, 0.25); }
     .btn-sell { background: linear-gradient(135deg, #f6465d, #d93048); color: #fff; width: 100%; padding: 11px; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(246, 70, 93, 0.25); }
     .kyc-banner {
-      background: rgba(240, 185, 11, 0.12); backdrop-filter: blur(10px); border-bottom: 1px solid var(--gold);
+      background: rgba(240, 185, 11, 0.12);  border-bottom: 1px solid var(--gold);
       padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;
     }
     .grid {
@@ -61,7 +61,7 @@
     }
     @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
     .card {
-      background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--border);
+      background: var(--panel);  border: 1px solid var(--border);
       border-radius: 12px; padding: 18px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     }
     .pair-tabs { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -85,7 +85,7 @@
     input:focus, select:focus { outline: none; border-color: var(--accent); }
     label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
     .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(3, 6, 12, 0.82); backdrop-filter: blur(8px);
+      position: fixed; inset: 0; background: rgba(3, 6, 12, 0.82); 
       display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;
     }
     .modal {
@@ -599,7 +599,7 @@
 
   loadChart('BTC');
   fetchPrices();
-  setInterval(fetchPrices, 15000);
+  setInterval(fetchPrices, 30000);
   if (currentUser) refreshPortfolio();
 </script>
 </body>
@@ -991,7 +991,7 @@
   }
 
   loadChart('BTC'); Promise.all([fetchPrices(), fetchSignals()]);
-  setInterval(fetchPrices, 15000); setInterval(fetchSignals, 60000);
+  setInterval(fetchPrices, 30000); setInterval(fetchSignals, 120000);
   if (currentUser) refreshPortfolio();
 </script>
 </body>

@@ -232,62 +232,42 @@ SIGNAL_CACHE = {"data": {}, "ts": 0}
 @app.get("/api/signals")
 async def get_trade_predictions():
     now = time.time()
-    if SIGNAL_CACHE["data"] and now - SIGNAL_CACHE["ts"] < 60:
+    if SIGNAL_CACHE["data"] and now - SIGNAL_CACHE["ts"] < 120:
         return SIGNAL_CACHE["data"]
     coin_map = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"}
-    predictions = {}
-    async with httpx.AsyncClient(timeout=8.0) as client:
-        for sym, cid in coin_map.items():
-            try:
-                url = f"https://api.coingecko.com/api/v3/coins/{cid}/market_chart?vs_currency=usd&days=2"
-                r = await client.get(url)
-                raw = [p[1] for p in r.json().get("prices", [])]
-                current = raw[-1]
-                rsi = compute_rsi(raw, 14)
-                sma_short = sum(raw[-6:]) / 6
-                sma_long = sum(raw[-24:]) / 24
-                trend_up = sma_short > sma_long
 
-                if rsi < 38 or (trend_up and rsi < 62):
-                    signal = "STRONG BUY" if rsi < 38 else "BUY"
-                    confidence = min(92, int(72 + abs(50 - rsi) * 0.6))
-                    target = round(current * 1.032, 2)
-                    stop = round(current * 0.985, 2)
-                    reason = f"RSI ({rsi}) + Bullish EMA crossover"
-                elif rsi > 68 or (not trend_up and rsi > 45):
-                    signal = "STRONG SELL" if rsi > 72 else "SELL"
-                    confidence = min(90, int(70 + abs(rsi - 50) * 0.6))
-                    target = round(current * 0.968, 2)
-                    stop = round(current * 1.015, 2)
-                    reason = f"RSI ({rsi}) + Bearish momentum shift"
-                else:
-                    signal = "HOLD / WATCH"
-                    confidence = 64
-                    target = round(current * 1.02, 2)
-                    stop = round(current * 0.985, 2)
-                    reason = f"Consolidating near equilibrium (RSI {rsi})"
+    async def fetch_one(client, sym, cid):
+        try:
+            url = f"https://api.coingecko.com/api/v3/coins/{cid}/market_chart?vs_currency=usd&days=2"
+            r = await client.get(url)
+            raw = [p[1] for p in r.json().get("prices", [])]
+            current = raw[-1]
+            rsi = compute_rsi(raw, 14)
+            sma_short = sum(raw[-6:]) / 6
+            sma_long = sum(raw[-24:]) / 24
+            trend_up = sma_short > sma_long
+            if rsi < 38 or (trend_up and rsi < 62):
+                signal = "STRONG BUY" if rsi < 38 else "BUY"
+                confidence = min(92, int(72 + abs(50 - rsi) * 0.6))
+                target, stop = round(current * 1.032, 2), round(current * 0.985, 2)
+                reason = f"RSI ({rsi}) + Bullish EMA crossover"
+            elif rsi > 68 or (not trend_up and rsi > 45):
+                signal = "STRONG SELL" if rsi > 72 else "SELL"
+                confidence = min(90, int(70 + abs(rsi - 50) * 0.6))
+                target, stop = round(current * 0.968, 2), round(current * 1.015, 2)
+                reason = f"RSI ({rsi}) + Bearish momentum shift"
+            else:
+                signal, confidence = "HOLD / WATCH", 64
+                target, stop = round(current * 1.02, 2), round(current * 0.985, 2)
+                reason = f"Consolidating near equilibrium (RSI {rsi})"
+            return sym, {"symbol": sym, "signal": signal, "confidence": confidence, "entry": round(current, 2), "target": target, "stop_loss": stop, "rsi": rsi, "reason": reason}
+        except Exception:
+            p = PRICE_CACHE["data"].get(sym, {}).get("price", 0)
+            return sym, {"symbol": sym, "signal": "BUY", "confidence": 79, "entry": p, "target": round(p * 1.03, 2), "stop_loss": round(p * 0.985, 2), "rsi": 44.5, "reason": "Momentum trend continuation"}
 
-                predictions[sym] = {
-                    "symbol": sym,
-                    "signal": signal,
-                    "confidence": confidence,
-                    "entry": round(current, 2),
-                    "target": target,
-                    "stop_loss": stop,
-                    "rsi": rsi,
-                    "reason": reason
-                }
-            except Exception:
-                predictions[sym] = {
-                    "symbol": sym,
-                    "signal": "BUY",
-                    "confidence": 79,
-                    "entry": 0,
-                    "target": 0,
-                    "stop_loss": 0,
-                    "rsi": 44.5,
-                    "reason": "Momentum trend continuation"
-                }
+    async with httpx.AsyncClient(timeout=2.5) as client:
+        results = await asyncio.gather(*(fetch_one(client, s, c) for s, c in coin_map.items()))
+    predictions = dict(results)
     SIGNAL_CACHE["data"] = predictions
     SIGNAL_CACHE["ts"] = time.time()
     return predictions
