@@ -4,81 +4,101 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NexTrade — Regulated Crypto Spot Exchange</title>
-  <style>
+    <style>
     :root {
-      --bg: #0b0e14;
-      --panel: #131722;
-      --border: #232938;
-      --text: #eaecef;
-      --muted: #848e9c;
+      --bg: #05080f;
+      --panel: rgba(16, 22, 34, 0.72);
+      --border: rgba(0, 210, 255, 0.16);
+      --text: #f0f4f8;
+      --muted: #8b9bb4;
       --accent: #00d2ff;
       --green: #0ecb81;
       --red: #f6465d;
       --gold: #f0b90b;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif; }
+    body {
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(circle at 15% 15%, rgba(0, 210, 255, 0.14) 0%, transparent 42%),
+        radial-gradient(circle at 85% 25%, rgba(14, 203, 129, 0.10) 0%, transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+        linear-gradient(rgba(0, 210, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 210, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+      background-attachment: fixed;
+      color: var(--text);
+      min-height: 100vh;
+    }
     header {
       display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
-      padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--border);
+      padding: 14px 24px; background: rgba(11, 15, 25, 0.82); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
     }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.5px; }
-    .brand span { color: var(--accent); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.3rem; letter-spacing: 0.6px; }
+    .brand span { color: var(--accent); text-shadow: 0 0 14px rgba(0, 210, 255, 0.45); }
     .user-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.78rem; font-weight: 700; }
     .badge-verified { background: rgba(14, 203, 129, 0.15); color: var(--green); border: 1px solid var(--green); }
     .badge-unverified { background: rgba(240, 185, 11, 0.15); color: var(--gold); border: 1px solid var(--gold); cursor: pointer; }
     .btn {
       padding: 8px 14px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.88rem;
-      background: var(--accent); color: #05080f; transition: 0.15s;
+      background: linear-gradient(135deg, #00d2ff, #0088ff); color: #05080f; transition: 0.2s;
+      box-shadow: 0 4px 14px rgba(0, 210, 255, 0.25);
     }
-    .btn:hover { opacity: 0.9; }
-    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
-    .btn-buy { background: var(--green); color: #05080f; width: 100%; padding: 11px; font-size: 0.95rem; }
-    .btn-sell { background: var(--red); color: #fff; width: 100%; padding: 11px; font-size: 0.95rem; }
-
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0, 210, 255, 0.4); }
+    .btn-outline { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); color: var(--text); box-shadow: none; }
+    .btn-buy { background: linear-gradient(135deg, #0ecb81, #09a668); color: #05080f; width: 100%; padding: 11px; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(14, 203, 129, 0.25); }
+    .btn-sell { background: linear-gradient(135deg, #f6465d, #d93048); color: #fff; width: 100%; padding: 11px; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(246, 70, 93, 0.25); }
     .kyc-banner {
-      background: rgba(240, 185, 11, 0.12); border-bottom: 1px solid var(--gold);
+      background: rgba(240, 185, 11, 0.12); backdrop-filter: blur(10px); border-bottom: 1px solid var(--gold);
       padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;
     }
     .grid {
-      display: grid; grid-template-columns: 2.2fr 1fr; gap: 16px; padding: 16px 24px; max-width: 1440px; margin: auto;
+      display: grid; grid-template-columns: 2.2fr 1fr; gap: 18px; padding: 20px 24px; max-width: 1440px; margin: auto;
     }
     @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
-    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-    .pair-tabs { display: flex; gap: 10px; margin-bottom: 12px; }
+    .card {
+      background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    }
+    .pair-tabs { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .pair-tab {
-      padding: 8px 14px; border-radius: 6px; background: #1c2230; border: 1px solid var(--border);
-      color: var(--text); cursor: pointer; font-weight: 600;
+      padding: 8px 14px; border-radius: 8px; background: rgba(28, 34, 48, 0.7); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer; font-weight: 600; transition: 0.15s;
     }
-    .pair-tab.active { border-color: var(--accent); color: var(--accent); }
-    .wallet-row {
-      display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.92rem;
-    }
+    .pair-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(0, 210, 255, 0.1); }
+    .signals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+    @media (max-width: 768px) { .signals-grid { grid-template-columns: 1fr; } }
+    .signal-box { background: rgba(9, 13, 22, 0.75); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .sig-buy { color: var(--green); font-weight: 800; }
+    .sig-sell { color: var(--red); font-weight: 800; }
+    .sig-hold { color: var(--gold); font-weight: 800; }
+    .wallet-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.92rem; }
     .wallet-row:last-child { border-bottom: none; }
     input, select {
       width: 100%; padding: 10px 12px; margin-top: 6px; margin-bottom: 14px;
-      background: #0e121b; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.92rem;
+      background: rgba(8, 12, 20, 0.85); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.92rem;
     }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
     label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
-
-    /* Modals */
     .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); display: flex; align-items: center; justify-content: center;
-      z-index: 1000; padding: 16px;
+      position: fixed; inset: 0; background: rgba(3, 6, 12, 0.82); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;
     }
     .modal {
-      background: var(--panel); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 440px; padding: 24px;
+      background: rgba(16, 22, 34, 0.92); border: 1px solid rgba(0, 210, 255, 0.25);
+      border-radius: 14px; width: 100%; max-width: 440px; padding: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
     }
     .modal h2 { margin-bottom: 6px; font-size: 1.25rem; }
     .modal p { color: var(--muted); font-size: 0.88rem; margin-bottom: 16px; }
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-    .tab { flex: 1; padding: 9px; text-align: center; background: #0e121b; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .tab { flex: 1; padding: 9px; text-align: center; background: rgba(8, 12, 20, 0.8); border-radius: 8px; cursor: pointer; font-weight: 600; }
     .tab.active { background: var(--accent); color: #05080f; }
     .hidden { display: none !important; }
     .error-msg { color: var(--red); font-size: 0.85rem; margin-bottom: 10px; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
     th { color: var(--muted); }
   </style>
 </head>
