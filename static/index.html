@@ -178,7 +178,10 @@
 <!-- AUTH MODAL (Email + Phone Login & Registration) -->
 <div id="authModal" class="modal-backdrop">
   <div class="modal">
-    <h2>Welcome to NexTrade</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">Welcome to NexTrade</h2>
+      <button type="button" onclick="document.getElementById('authModal').classList.remove('active')" style="background:none;border:none;color:#8a9bb5;font-size:24px;cursor:pointer;line-height:1;">&times;</button>
+    </div>
     <p>Sign in with your Email or Phone Number, or create a verified account.</p>
     <div class="tabs">
       <div id="tabLogin" class="tab active" onclick="switchAuthTab('login')">Log In</div>
