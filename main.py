@@ -414,3 +414,90 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 def root():
     return FileResponse("static/index.html")
+
+
+# --- PHONE SMS OTP VERIFICATION ---
+import random, os, urllib.request, urllib.parse, json
+
+def _init_otp_table():
+    conn = sqlite3.connect("nextrade.db")
+    conn.execute("""CREATE TABLE IF NOT EXISTS phone_otps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        phone TEXT,
+        code TEXT,
+        verified INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.commit()
+    conn.close()
+
+_init_otp_table()
+
+@app.post("/api/auth/send-otp")
+async def send_phone_otp(payload: dict):
+    user_id = payload.get("user_id")
+    phone = (payload.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number is required.")
+    code = f"{random.randint(100000, 999999)}"
+    conn = sqlite3.connect("nextrade.db")
+    conn.execute("INSERT INTO phone_otps (user_id, phone, code) VALUES (?, ?, ?)", (user_id, phone, code))
+    conn.commit()
+    conn.close()
+
+    # Optional Africa's Talking SMS integration (set AT_USERNAME & AT_API_KEY in Render)
+    at_user = os.getenv("AT_USERNAME")
+    at_key = os.getenv("AT_API_KEY")
+    sms_sent = False
+    if at_user and at_key:
+        try:
+            url = "https://api.sandbox.africastalking.com/version1/messaging" if at_user == "sandbox" else "https://api.africastalking.com/version1/messaging"
+            data = urllib.parse.urlencode({"username": at_user, "to": phone, "message": f"Your NexTrade verification code is: {code}"}).encode()
+            req = urllib.request.Request(url, data=data, headers={"apiKey": at_key, "Accept": "application/json"})
+            urllib.request.urlopen(req, timeout=8)
+            sms_sent = True
+        except Exception:
+            sms_sent = False
+
+    return {
+        "status": "sent",
+        "phone": phone,
+        "sms_sent": sms_sent,
+        "demo_code": None if sms_sent else code,
+        "message": f"Verification code sent to {phone}" if sms_sent else f"Sandbox SMS Mode: Use code {code} (add AT_API_KEY on Render for live SMS)"
+    }
+
+@app.post("/api/auth/verify-otp")
+async def verify_phone_otp(payload: dict):
+    user_id = payload.get("user_id")
+    phone = (payload.get("phone") or "").strip()
+    code = (payload.get("code") or "").strip()
+    conn = sqlite3.connect("nextrade.db")
+    row = conn.execute(
+        "SELECT id FROM phone_otps WHERE (user_id = ? OR phone = ?) AND code = ? ORDER BY id DESC LIMIT 1",
+        (user_id, phone, code)
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid verification code. Please check and try again.")
+    conn.execute("UPDATE phone_otps SET verified = 1 WHERE id = ?", (row[0],))
+    conn.commit()
+    conn.close()
+    return {"status": "verified", "message": "Phone number verified!"}
+
+
+@app.get("/api/admin/users")
+async def list_registered_users(key: str = ""):
+    import os
+    admin_secret = os.getenv("ADMIN_KEY", "Admin@2026")
+    if key != admin_secret:
+        raise HTTPException(status_code=403, detail="Unauthorized admin key")
+    conn = sqlite3.connect("nextrade.db")
+    conn.row_factory = sqlite3.Row
+    users = [dict(r) for r in conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()]
+    for u in users:
+        u.pop("password_hash", None)
+        u.pop("password", None)
+    conn.close()
+    return {"total_users": len(users), "users": users}
