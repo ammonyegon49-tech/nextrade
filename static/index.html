@@ -102,8 +102,7 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
     th { color: var(--muted); }
-  
-</style>
+  </style>
 </head>
 <body>
 
@@ -177,12 +176,9 @@
 </div>
 
 <!-- AUTH MODAL (Email + Phone Login & Registration) -->
-<div id="authModal" class="modal-backdrop">
+<div id="authModal" class="modal-backdrop hidden">
   <div class="modal">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2 style="margin:0;">Welcome to NexTrade</h2>
-      <button type="button" onclick="closeAuthModal()" style="background:none;border:none;color:#8a9bb5;font-size:24px;cursor:pointer;line-height:1;">&times;</button>
-    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;"><h2 style="margin:0;">Welcome to NexTrade</h2><button type="button" onclick="closeAuthModal()" style="background:none;border:none;color:#8a9bb5;font-size:24px;cursor:pointer;line-height:1;">&times;</button></div>
     <p>Sign in with your Email or Phone Number, or create a verified account.</p>
     <div class="tabs">
       <div id="tabLogin" class="tab active" onclick="switchAuthTab('login')">Log In</div>
@@ -413,7 +409,7 @@
 
   function selectSymbol(sym, el) {
     currentSymbol = sym;
-    document.querySelectorAll('.pair-tab').forEach(b => b.classList.remove('show-auth'));
+    document.querySelectorAll('.pair-tab').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('orderPair').innerText = sym;
     document.getElementById('buySym').innerText = sym;
@@ -425,31 +421,19 @@
     document.getElementById('authError').innerText = '';
     if (tab === 'login') {
       document.getElementById('tabLogin').classList.add('active');
-      document.getElementById('tabRegister').classList.remove('show-auth');
+      document.getElementById('tabRegister').classList.remove('active');
       document.getElementById('loginForm').classList.remove('hidden');
       document.getElementById('registerForm').classList.add('hidden');
     } else {
       document.getElementById('tabRegister').classList.add('active');
-      document.getElementById('tabLogin').classList.remove('show-auth');
+      document.getElementById('tabLogin').classList.remove('active');
       document.getElementById('registerForm').classList.remove('hidden');
       document.getElementById('loginForm').classList.add('hidden');
     }
   }
 
-  function openAuthModal() {
-  const m = document.getElementById("authModal");
-  if (!m) return;
-  m.classList.remove("hidden");
-  m.classList.add("active");
-  m.style.display = "flex";
-}
-  function closeAuthModal() {
-  const m = document.getElementById("authModal");
-  if (!m) return;
-  m.classList.add("hidden");
-  m.classList.remove("active");
-  m.style.display = "none";
-}
+  function openAuthModal() { document.getElementById('authModal').classList.remove('hidden'); }
+  function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
   function openKycModal() {
     if (currentUser) document.getElementById('kycFullName').value = currentUser.full_name || '';
     document.getElementById('kycModal').classList.remove('hidden');
@@ -660,9 +644,9 @@
 </div>
 
 <!-- AUTH MODAL -->
-<div id="authModal" class="modal-backdrop">
+<div id="authModal" class="modal-backdrop hidden">
   <div class="modal">
-    <h2>Welcome to NexTrade</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;"><h2 style="margin:0;">Welcome to NexTrade</h2><button type="button" onclick="closeAuthModal()" style="background:none;border:none;color:#8a9bb5;font-size:24px;cursor:pointer;line-height:1;">&times;</button></div>
     <p>Sign in with your Email or Phone Number, or create a verified account.</p>
     <div class="tabs">
       <div id="tabLogin" class="tab active" onclick="switchAuthTab('login')">Log In</div>
@@ -855,7 +839,7 @@
 
   function selectSymbol(sym, el) {
     currentSymbol = sym;
-    document.querySelectorAll('.pair-tab').forEach(b => b.classList.remove('show-auth'));
+    document.querySelectorAll('.pair-tab').forEach(b => b.classList.remove('active'));
     if (el) el.classList.add('active');
     else document.getElementById(`tab-${sym}`).classList.add('active');
     document.getElementById('orderPair').innerText = sym;
@@ -900,20 +884,8 @@
     document.getElementById('registerForm').classList.toggle('hidden', isLogin);
   }
 
-  function openAuthModal() {
-  const m = document.getElementById("authModal");
-  if (!m) return;
-  m.classList.remove("hidden");
-  m.classList.add("active");
-  m.style.display = "flex";
-}
-  function closeAuthModal() {
-  const m = document.getElementById("authModal");
-  if (!m) return;
-  m.classList.add("hidden");
-  m.classList.remove("active");
-  m.style.display = "none";
-}
+  function openAuthModal() { document.getElementById('authModal').classList.remove('hidden'); }
+  function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
   function openKycModal() {
     if (currentUser) document.getElementById('kycFullName').value = currentUser.full_name || '';
     document.getElementById('kycModal').classList.remove('hidden');
